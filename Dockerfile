@@ -23,4 +23,4 @@ RUN mkdir -p data audio_cache logs
 EXPOSE 10000
 
 # Запускаем основной файл (убедись, что это main.py или bot.py)
-CMD ["python", "main.py"] 
+CMD ["python", "bot.py"] 
