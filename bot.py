@@ -1,13 +1,32 @@
-
 import discord
 from discord.ext import commands
 import logging
 import asyncio
 import sys
 import os
+from threading import Thread  # Добавили для Flask
+from flask import Flask        # Добавили для Render
 from config import Config
 from utils.cache import cache
 from utils.database import Database
+
+# --- Блок для Render (Flask) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "I'm alive"
+
+def run_flask():
+    # Render передает порт в переменную окружения PORT
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True # Поток умрет вместе с основным процессом
+    t.start()
+# ------------------------------
 
 # Logging Setup
 logging.basicConfig(
@@ -27,27 +46,23 @@ class TranslatorBot(commands.Bot):
         intents.members = True
         intents.presences = True
         intents.guilds = True
-        
+
         super().__init__(
             command_prefix="!",
             intents=intents,
             help_command=None
         )
-        
+
         self.db: Database = None
-    
+
     async def setup_hook(self):
         logger.info("🚀 Starting bot...")
-        
         await cache.connect()
-        
         self.db = Database(Config.DB_PATH)
         await self.db.connect()
-        
         await self.load_cogs()
-        
         logger.info("✅ Bot ready!")
-    
+
     async def load_cogs(self):
         cogs = [
             "cogs.translation",
@@ -58,30 +73,34 @@ class TranslatorBot(commands.Bot):
             "cogs.stats",
             "cogs.admin",
         ]
-        
+
         for cog in cogs:
             try:
                 await self.load_extension(cog)
                 logger.info(f"✅ Loaded cog: {cog}")
             except Exception as e:
                 logger.error(f"❌ Failed to load {cog}: {e}")
-                import traceback
-                traceback.print_exc()
 
     async def on_ready(self):
         logger.info(f"✅ Logged in as {self.user} (ID: {self.user.id})")
         await self.tree.sync()
-    
+
     async def close(self):
         logger.info("🛑 Shutting down...")
         await cache.close()
-        await self.db.close()
+        # Проверка на существование БД перед закрытием
+        if self.db:
+            await self.db.close()
         await super().close()
 
 async def main():
     if not Config.TOKEN:
         logger.error("❌ DISCORD_TOKEN not found in environment!")
         return
+
+    # ЗАПУСКАЕМ ФЛАСК ПЕРЕД БОТОМ
+    logger.info("🌐 Starting keep-alive server...")
+    keep_alive()
 
     bot = TranslatorBot()
     try:
